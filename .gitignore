@@ -1,0 +1,7 @@
+.DS_Store
+Thumbs.db
+__pycache__/
+*.pyc
+.venv/
+_trace_extract.json
+_trace_extract.txt
