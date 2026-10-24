@@ -73,11 +73,21 @@ The agent should not dump raw JSONL into the chat. Use:
 python scripts/extract_transcript.py --jsonl "<session.jsonl>" --out "_trace_extract.json"
 ```
 
+The transcript layout is auto-detected per record, so the same script handles both hosts.
+
 Cursor transcripts typically live at:
 
 ```text
 agent-transcripts/<conversation_id>/<conversation_id>.jsonl
 ```
+
+Claude Code transcripts live at `~/.claude/projects/<escaped-project-path>/<session_id>.jsonl`, where the directory name is the project path with every non-alphanumeric character replaced by `-`:
+
+```bash
+ls -t ~/.claude/projects/"$(pwd | sed 's#[^a-zA-Z0-9]#-#g')"/*.jsonl | head -1
+```
+
+Claude Code specifics the extractor handles: role lives in `type` rather than a top-level `role`; one assistant response is split across records sharing `message.id` and gets merged; `thinking` and `tool_use` blocks are dropped; tool results, `isMeta` injections, `isSidechain` subagent turns, and `<system-reminder>` blocks are skipped or stripped.
 
 Requires Python 3.9+ (stdlib only).
 

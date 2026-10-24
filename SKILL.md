@@ -27,7 +27,7 @@ Do **not** use this skill to write the implementation spec itself. If both are r
 1. Reconstruct from the session **transcript**, not from chat memory.
 2. Quote user wording **verbatim**. Do not paraphrase user requirements.
 3. Confirmation status has **only four values**. Never invent a fifth. Never promote a default into `用户确认`.
-4. Skip system injections (agent type catalogs, hook JSON, `beforeSubmitPrompt` payloads, duplicated compacted user turns).
+4. Skip system injections (agent type catalogs, hook JSON, `beforeSubmitPrompt` payloads, `<system-reminder>` blocks, tool results, subagent turns, duplicated compacted user turns).
 5. Do not start implementation, commit, or push unless the user also asked for that in the same request.
 6. Do not copy private business documents into the public example files of this skill.
 
@@ -64,6 +64,21 @@ Typical Cursor layout:
 
 `agent-transcripts/<conversation_id>/<conversation_id>.jsonl`
 
+Typical Claude Code layout — one file per session, directory name is the project
+path with every non-alphanumeric character replaced by `-` (so `/Users/me/my_app`
+becomes `-Users-me-my-app`):
+
+`~/.claude/projects/<escaped-project-path>/<session_id>.jsonl`
+
+To find the current session, pick the most recently modified jsonl in the
+directory matching the working directory:
+
+```bash
+ls -t ~/.claude/projects/"$(pwd | sed 's#[^a-zA-Z0-9]#-#g')"/*.jsonl | head -1
+```
+
+Confirm with the user before reading a session other than the current one.
+
 If a `compaction/` folder exists, use it only to recover missing early turns. The jsonl is the source of truth.
 
 If no transcript is available, stop and say so. Do not invent turns.
@@ -71,12 +86,30 @@ If no transcript is available, stop and say so. Do not invent turns.
 ### 2. Extract turns
 
 Run the bundled script (UTF-8, Windows-safe). Do not dump JSONL into the chat.
+It auto-detects the Cursor and Claude Code layouts; use an absolute path to the
+script when the working directory is not the skill folder.
 
 ```bash
-python scripts/extract_transcript.py --jsonl "<transcript.jsonl>" --out "<work-dir>/_trace_extract.json"
+python3 ~/.claude/skills/conversation-audit-trail/scripts/extract_transcript.py \
+  --jsonl "<transcript.jsonl>" --out "<work-dir>/_trace_extract.json"
 ```
 
-Then read `_trace_extract.json`. Treat `skip_reason` rows as non-decision turns.
+Then read `_trace_extract.json`. It reports the detected `format`, and each user
+turn carries a `kind`:
+
+| `kind` | Meaning |
+|---|---|
+| `prompt` | A real user message — the only kind that can lock a rule |
+| `slash_command` | User invoked a command; text is normalized to `/name args` |
+| `local_command` | Output of a local command the user ran, not a requirement |
+
+Treat `skip_reason` rows as non-decision turns. Claude Code adds these reasons:
+`tool_result` (tool output stored as a user record), `meta` (`isMeta` injection),
+`subagent` (`isSidechain` turn), `compact_summary`.
+
+Assistant records sharing one `message.id` are merged into a single turn;
+`thinking` and `tool_use` blocks are dropped, so the extract holds only what the
+assistant actually said to the user. Internal reasoning is never evidence.
 
 Delete the extract file after the document is written, unless the user wants to keep it.
 
